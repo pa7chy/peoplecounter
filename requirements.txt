@@ -1,0 +1,7 @@
+opencv-python
+scipy
+onnxruntime-gpu==1.8.0
+numpy>=1.21.6
+lap==0.4.0
+Cython==0.29.25
+cython-bbox==0.1.3
