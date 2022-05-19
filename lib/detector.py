@@ -23,7 +23,7 @@ class Detector:
     def post(self, X):        
         hm, wh, id_feature, reg = X
         id_feature /= np.linalg.norm(id_feature, ord=2, axis=1)
-        hm = sigmoid(hm)
+        # hm = sigmoid(hm)
         dets, inds = mot_decode(hm, wh, reg=reg, ltrb=True, K=self.K)
         id_feature = _tranpose_and_gather_feat(id_feature, inds)
         id_feature = np.squeeze(id_feature,axis=0)

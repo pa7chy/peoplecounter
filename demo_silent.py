@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import sys
 import threading
+import time
 from collections import deque
 from lib.vis import plot_one_bound_count
 from lib.intersect import Line, intersect, clockwise
@@ -12,6 +13,8 @@ from lib.camera import Camera
 PSTART = ''
 PEND = ''
 BOUNDS = []
+line = Line([701, 321], [339, 257])
+BOUNDS.append(line)
 MODE = 0
 BLUE = (255, 0, 0)
 GREEN = (0, 255, 0)
@@ -20,41 +23,24 @@ WHITE = (255, 255, 255)
 CYAN = (255, 255, 0)
 YELLOW = (0, 255, 255)
 MAGENTA = (255, 0, 255)
-
-def on_mouse(event, x, y, flags, param):
-    global PSTART
-    global PEND
-    global BOUNDS
-    global MODE
-    global GREEN
-    if event == cv2.EVENT_LBUTTONDOWN:
-        if MODE == 1:
-            line = Line(PSTART, PEND, GREEN)
-            # print(PSTART,PEND)
-            BOUNDS.append(line)
-            MODE -= 1
-        if MODE == 2:
-            PSTART = [x, y]
-            PEND = [x, y]
-            MODE -= 1
-    if MODE == 1:
-        PEND = [x, y]
         
 def background_forward(camera, detector, tracker, BOUNDS):
     while True:
+        start_time = time.time()
         img0 = camera.capture.copy()
         img0 = np.ascontiguousarray(img0, dtype=np.float32)
         img0 /= 255.0
         x = np.transpose(img0, (2, 0, 1))[np.newaxis, ...]
         online_tlwhs = []
         online_ids = []
-        output = tracker.update(*detector.forward(x))
+        dets = detector.forward(x)
+        # print(dets[0])
+        output = tracker.update(*dets)
         for t in output:
             tlwh = t.tlwh
             tid = t.track_id
             online_tlwhs.append(tlwh)
             online_ids.append(tid)
-            
             for bound in BOUNDS:
                 if len(t.tracklet) > 1:
                     line = Line(*t.tracklet)
@@ -65,6 +51,8 @@ def background_forward(camera, detector, tracker, BOUNDS):
                         else:
                             bound.reduce()
                             print('up')
+        end_time = time.time()
+        # print('FPS %i'%(1/(end_time-start_time)), end="\r", flush=True)
 
 if __name__ == '__main__':
     if len(sys.argv)>1:
@@ -72,12 +60,12 @@ if __name__ == '__main__':
         capture = cv2.VideoCapture(addr)
     else:
         capture = cv2.VideoCapture(0)
-    ret, cmsrc = capture.read()
+    camera = Camera()
+    # capture = cv2.VideoCapture('sample.mp4')
+    ret, camera.img = capture.read()
     
     detector = Detector('post.onnx')
     tracker = Tracker()
-    camera = Camera()
-    ret, camera.img = capture.read()
 
     cmsrc = camera.capture
     cmW, cmH, cmC = cmsrc.shape
@@ -85,13 +73,11 @@ if __name__ == '__main__':
     th = threading.Thread(target=background_forward,args=(camera, detector, tracker, BOUNDS))
     th.setDaemon(True)
     th.start()
-    cv2.namedWindow('PeopleCounterDemo')
-    cv2.setMouseCallback('PeopleCounterDemo', on_mouse)
-    
+
     while ret:
+        # time.sleep(1/20)
         ret, camera.img = capture.read()
         cmsrc = camera.capture
-        # cmsrc = cv2.addWeighted(cmsrc,1,musk,1,0)
         
         cmimg = cmsrc.copy()
         if MODE == 1:
@@ -99,8 +85,6 @@ if __name__ == '__main__':
         for bound in BOUNDS:
             cv2.arrowedLine(cmimg, bound.p1, bound.p2, bound.color, 5)
             cmimg = plot_one_bound_count(cmimg, bound)
-
-        cv2.imshow('PeopleCounterDemo', cmimg)
 
         key = cv2.waitKey(1)
         if key & 0xFF == ord('a'):
@@ -111,5 +95,4 @@ if __name__ == '__main__':
             for bound in BOUNDS:
                 bound.clear()
 
-    cv2.destroyAllWindows()
     sys.exit()
